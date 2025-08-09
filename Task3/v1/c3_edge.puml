@@ -1,0 +1,23 @@
+@startuml
+!includeurl https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+LAYOUT_WITH_LEGEND()
+title C3 — Edge (Агент фермы): компонентная диаграмма
+
+Container_Boundary(edge, "Edge") {
+  Component(edgehub, "Edge Hub", "Service", "Локальная шина, офлайн буфер, store-and-forward, sync.")
+  Component(camgw, "Camera Gateway", "Service", "Подключение RTSP/ONVIF, нормализация потоков, снапшоты.")
+  Component(va, "Video Analytics Service", "Service + GPU", "RT детекция событий, трекинг, пересчёт поголовья.")
+  Component(ctrl, "Feeding & Water Control", "Service", "Команды на кормушки/поилки/фильтрацию, ACK/Retry.")
+  Component(locnot, "Local Notifier", "Service", "GSM/SMS/звонок/мессенджер при отсутствии интернета.")
+  Component(edgebus, "Edge Broker", "RabbitMQ (embedded) + MQTT", "Локальная шина для edge-компонентов и устройств.")
+  Component(edgedb, "Edge Store", "SQLite/TSDB", "Офлайн журналы/кэш/квоты, очереди синка.")
+}
+
+Rel(camgw, va, "Потоки/кадры", "RTSP/UDPH")
+Rel(va, edgebus, "События детекции", "AMQP")
+Rel(ctrl, edgebus, "Команды/ACK", "AMQP/MQTT")
+Rel(locnot, edgebus, "Подписка на критические события", "AMQP")
+Rel(edgehub, edgebus, "Маршрутизация/буферизация", "AMQP/MQTT")
+Rel(edgehub, edgedb, "Журнал входящих/исходящих", "SQL/FS")
+
+@enduml

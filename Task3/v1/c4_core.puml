@@ -1,0 +1,65 @@
+@startuml
+' C4 Level 4 uses code/class diagrams; using PlantUML classes to illustrate internal structure.
+@startuml
+skinparam packageStyle rectangle
+title C4 (Code) — Animal State Service (Core)
+
+package "Animal State Service" {
+  package "API Layer" {
+    class IncidentController {
+      +getIncidents(filter): IncidentDTO[]
+      +confirmIncident(id): void
+      +getAnimalState(animalId): AnimalStateDTO
+    }
+  }
+  package "Application Layer" {
+    class IncidentService {
+      +ingest(Event): void
+      +confirm(id, userId): void
+      +getByFilter(filter): Incident[]
+    }
+    class StateProjection {
+      +apply(Event): void
+      +getState(animalId): AnimalState
+    }
+  }
+  package "Domain" {
+    class Incident {
+      -id: UUID
+      -type: IncidentType
+      -ts: Instant
+      -farmId: UUID
+      -evidenceRef: URI
+      +confirm(byUserId): void
+    }
+    class AnimalState {
+      -animalId: UUID
+      -status: Status
+      -updatedAt: Instant
+    }
+    enum IncidentType { Fight, Crushing, Illness, Death, Distress }
+    enum Status { Healthy, Sick, Dead, Distressed, Unknown }
+    class Event {
+      -id: String
+      -ts: Instant
+      -farmId: UUID
+      -payload: Map
+    }
+  }
+  package "Adapters" {
+    class AmqpConsumer { +onMessage(msg): void }
+    class Repository { +saveIncident(i): void; +find(filter): Incident[] }
+    class ProjectionStore { +saveState(s): void; +get(animalId): AnimalState }
+    class ObjectStorage { +getEvidence(uri): bytes }
+  }
+}
+
+IncidentController --> IncidentService
+IncidentService --> Repository
+IncidentService --> StateProjection
+AmqpConsumer --> IncidentService : ingest(Event)
+StateProjection --> ProjectionStore
+Repository --> "PostgreSQL/Timescale"
+ObjectStorage --> "S3"
+
+@enduml

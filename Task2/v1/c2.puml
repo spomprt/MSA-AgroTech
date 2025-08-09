@@ -1,0 +1,70 @@
+@startuml
+!includeurl https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+LAYOUT_WITH_LEGEND()
+title C2 — Платформа мониторинга ферм (Core + Edge)
+
+Boundary(core, "Core (Центр)") {
+  Container(api, "API Gateway / BFF", "REST/GraphQL", "Единая точка входа для UI/интеграций; rate-limit, auth, схемы.")
+  Container(ui, "Web UI", "SPA", "Рабочее место оператора/зоотехника.")
+  Container(animal, "Animal State Service", "Service + DB", "Агрегация/обогащение инцидентов, статусы животных.")
+  Container(inv, "Inventory & Forecast Service", "Service + DB", "Запасы корма и прогноз расхода.")
+  Container(notif, "Notification Service", "Service", "Маршрутизация уведомлений (SMS/Push/Email).")
+  Container(metrics, "Metrics & Exporter", "Service", "Prom/OpenMetrics, экспорт в ERP/BI.")
+  Container(devreg, "Device Registry", "Service + DB", "Реестр устройств, сертификаты, конфиги.")
+  Container(syncCore, "Sync Core", "Service", "Синхронизация с Edge (ingress/egress), дедупликация.")
+  Container(obj, "Object Storage", "S3-совместимое", "Видео-фрагменты/снапшоты для доказательной базы.")
+  Container(dbCore, "Core DB", "PostgreSQL/Timescale", "Инциденты, телеметрия, конфигурации.")
+  Container(bus, "Message Broker", "RabbitMQ (+MQTT bridge)", "Шина событий/команд Core.")
+  Container(otlp, "Observability Stack", "OTel Collector + Prometheus + Logs", "Трейсы/метрики/логи.")
+  Container(auth, "AuthN/Z", "OIDC/SAML Provider", "Аутентификация и авторизация.")
+  Container(bi, "ERP/BI Integrations", "Adapters", "Экспорт агрегатов/метрик/вебхуки.")
+}
+
+Boundary(edge, "Edge (Ферма)") {
+  Container(edgehub, "Edge Hub", "Service", "Локальная шина, сбор телеметрии, буферизация офлайн, sync.")
+  Container(va, "Video Analytics Service", "Service + GPU", "RT детекция, трекинг, пересчёт поголовья.")
+  Container(ctrl, "Feeding & Water Control", "Service", "Команды к кормушкам/поилкам, фильтрации воды.")
+  Container(camgw, "Camera Gateway", "Service", "RTSP/ONVIF, нормализация потоков, снапшоты.")
+  Container(locnot, "Local Notifier", "Service", "Локальные SMS/звонок/мессенджер при отсутствии интернета.")
+  Container(edgebus, "Edge Broker", "RabbitMQ (embedded) + MQTT", "Локальная шина для микросервисов Edge и устройств.")
+  Container(edgedb, "Edge Store", "SQLite/Lightweight TSDB", "Кэш/очереди/офлайн журналы событий.")
+}
+
+Person(op, "Оператор/Зоотехник")
+Person(oncall, "Дежурный на ферме")
+Person(app, "Мобильное/веб-приложение")
+
+Rel(op, ui, "Работа через браузер")
+Rel(app, api, "Мобильный/веб-клиент", "HTTPS")
+Rel(oncall, locnot, "Локальные оповещения", "GSM/SMS/звонок")
+
+Rel(ui, api, "UI API", "HTTPS + OIDC")
+Rel(api, animal, "CRUD/поиск инцидентов", "gRPC/REST")
+Rel(api, inv, "Запасы/прогноз", "gRPC/REST")
+Rel(api, devreg, "Реестр устройств", "gRPC/REST")
+Rel(api, notif, "Отправка уведомлений", "REST")
+Rel(api, metrics, "Метрики/дашборды", "Pull/Push")
+
+Rel(syncCore, edgehub, "Двусторонняя синхронизация", "HTTPS/mTLS + AMQP over TLS")
+Rel(edgehub, edgebus, "Публикация/подписка локально", "AMQP/MQTT")
+Rel(va, edgebus, "События детекции", "AMQP")
+Rel(ctrl, edgebus, "Команды/ACK", "AMQP/MQTT")
+Rel(camgw, va, "Видеопотоки/кадры", "RTSP/UDPH + shared mem")
+Rel(locnot, edgebus, "Подписка на критические события", "AMQP")
+
+Rel(syncCore, bus, "Шлюз между доменами", "AMQP + retry/DLX")
+Rel(bus, animal, "События инцидентов", "AMQP topics")
+Rel(bus, notif, "События для уведомлений", "AMQP")
+Rel(bus, inv, "Телеметрия/счетчики корма", "AMQP")
+Rel(bus, metrics, "Метрики", "OpenMetrics/AMQP")
+Rel(animal, dbCore, "Запись агрегатов", "SQL")
+Rel(inv, dbCore, "Запись прогнозов", "SQL")
+Rel(devreg, dbCore, "Конфигурации/устройства", "SQL")
+Rel(va, obj, "Загрузка фрагментов/снапшотов", "S3 API via Sync")
+Rel(edgehub, syncCore, "Буфер офлайн, дедупликация", "Store-&-forward")
+Rel(metrics, bi, "Экспорт агрегатов/метрик", "Webhooks/CSV/S3")
+
+Rel(auth, api, "OIDC/SAML")
+Rel(otlp, core, "Сбор телеметрии", "OTLP")
+Rel(otlp, edge, "Сбор телеметрии", "OTLP via Edge Hub")
+@enduml
