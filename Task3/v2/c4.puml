@@ -1,0 +1,97 @@
+@startuml
+' C4 Level 4 — Code diagram for Notification Service (UML classes)
+skinparam classAttributeIconSize 0
+
+package "notification" {
+  class AlertService {
+    +sendAlert(alert: Alert): void
+  }
+  class AlertRouter {
+    +route(alert: Alert): Route
+  }
+  class TemplateRenderer {
+    +render(tplId: String, vars: Map): Message
+  }
+  interface Channel {
+    +send(msg: Message, target: Target): DeliveryResult
+  }
+  class SmsChannel
+  class PushChannel
+  class VoiceChannel
+
+  SmsChannel ..|> Channel
+  PushChannel ..|> Channel
+  VoiceChannel ..|> Channel
+
+  class RateLimiter {
+    +check(key: String): boolean
+  }
+  class DeliveryTracker {
+    +recordAttempt(a: DeliveryAttempt): void
+    +status(id: UUID): DeliveryStatus
+  }
+  class EventSubscriber {
+    +onAlertEvent(event: AlertEvent): void
+  }
+  class OutboxPublisher {
+    +publish(evt: DeliveryEvent): void
+  }
+
+  class Alert {
+    +id: UUID
+    +severity: Severity
+    +targets: List<Target>
+  }
+  class Message {
+    +body: String
+    +meta: Map
+  }
+  class DeliveryAttempt {
+    +id: UUID
+    +status: DeliveryStatus
+  }
+  enum DeliveryStatus {
+    PENDING
+    SENT
+    FAILED
+  }
+
+  class AlertRepo {
+    +save(a: Alert): void
+    +find(id: UUID): Alert
+  }
+  class DeliveryAttemptRepo {
+    +save(a: DeliveryAttempt): void
+  }
+
+  class RedisClient
+  class PostgresClient
+  class AmqpConsumer
+  class AmqpProducer
+  class SmppClient
+  class FcmClient
+  class ApnsClient
+  class CallApiClient
+}
+
+EventSubscriber --> AlertService : onAlertEvent()
+AlertService --> AlertRouter : route()
+AlertService --> TemplateRenderer : render()
+AlertService --> Channel : send()
+AlertService --> DeliveryTracker : record/status
+AlertService --> RateLimiter : check()
+AlertService --> AlertRepo : persist
+AlertService --> OutboxPublisher : publish events
+
+SmsChannel --> SmppClient
+PushChannel --> FcmClient
+PushChannel --> ApnsClient
+VoiceChannel --> CallApiClient
+
+RateLimiter --> RedisClient
+DeliveryTracker --> DeliveryAttemptRepo
+AlertRepo --> PostgresClient
+EventSubscriber --> AmqpConsumer
+OutboxPublisher --> AmqpProducer
+
+@enduml

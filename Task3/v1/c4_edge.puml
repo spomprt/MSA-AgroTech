@@ -1,0 +1,34 @@
+@startuml
+skinparam packageStyle rectangle
+title C4 (Code) — Edge Hub (Edge)
+
+package "Edge Hub" {
+  package "Ingest" {
+    class MQTTIngest { +onMessage(topic, payload): void }
+    class AMQPIngest { +onMessage(routingKey, payload): void }
+  }
+  package "Sync" {
+    class Outbox { +enqueue(Event): void; +dequeue(): Event }
+    class Deduplicator { +isDuplicate(Event): boolean }
+    class SyncClient { +push(batch): Ack; +pull(): Event[] }
+    class RetryPolicy { +schedule(msg): void }
+  }
+  package "Storage" {
+    class EdgeStore { +appendJournal(Event): void; +read(offset): Event[] }
+    class QuotaManager { +checkAndPurge(): void }
+  }
+  package "Routing" {
+    class Router { +route(Event): void }
+  }
+}
+
+MQTTIngest --> Router
+AMQPIngest --> Router
+Router --> Outbox
+Router --> EdgeStore
+Outbox --> SyncClient
+Outbox --> Deduplicator
+SyncClient --> EdgeStore
+RetryPolicy --> Outbox
+
+@enduml

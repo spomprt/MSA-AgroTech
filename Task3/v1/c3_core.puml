@@ -1,0 +1,44 @@
+@startuml
+!includeurl https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+LAYOUT_WITH_LEGEND()
+title C3 — Core (Центральная платформа): компонентная диаграмма
+
+Container_Boundary(core, "Core") {
+  Component(api, "API Gateway / BFF", "Node/Go/etc.", "REST/GraphQL фронт для UI и внешних интеграций; rate limit, auth, схемы.")
+  Component(ui, "Web UI", "SPA", "Рабочее место оператора/зоотехника.")
+  Component(animal, "Animal State Service", "Service", "Агрегация/корреляция инцидентов, статусы животных, подтверждения.")
+  Component(inv, "Inventory & Forecast Service", "Service", "Учёт запасов и прогноз расхода.")
+  Component(devreg, "Device Registry", "Service", "Реестр устройств, ключи, сертификаты, совместимость, конфиги.")
+  Component(syncCore, "Sync Core", "Service", "Ingress/egress Edge-сообщений, дедупликация, идемпотентность.")
+  Component(notif, "Notification Service", "Service", "Маршрутизация уведомлений: SMS/Push/Email/звонки.")
+  Component(metrics, "Metrics & Exporter", "Service", "OpenMetrics/Prometheus, экспорт витрин в ERP/BI.")
+  Component(bi, "ERP/BI Integrations", "Adapters", "Вебхуки/пакеты/файлы в сторонние системы.")
+  Component(bus, "RabbitMQ (+MQTT bridge)", "Broker", "Шина событий/команд Core, DLX/Retry.")
+  Component(db, "PostgreSQL/Timescale", "DB", "Инциденты, телеметрия, конфигурации, агрегаты.")
+  Component(obj, "S3 Object Storage", "Storage", "Видео-фрагменты и снимки для доказательной базы.")
+  Component(auth, "AuthN/Z", "OIDC/SAML", "Провайдер аутентификации/авторизации.")
+  Component(otel, "Observability", "OTel Collector/Prom/Logs", "Трейсы/метрики/логи.")
+}
+
+Rel(ui, api, "UI API", "HTTPS + OIDC")
+Rel(api, animal, "CRUD/поиск/подтверждения", "gRPC/REST")
+Rel(api, inv, "Операции по запасам/прогнозу", "gRPC/REST")
+Rel(api, devreg, "Управление устройствами/ключами", "gRPC/REST")
+Rel(api, notif, "Создание задач уведомлений", "REST")
+Rel(api, metrics, "Метрики/дашборды", "Pull/Push")
+
+Rel(syncCore, bus, "Публикация/подписка доменных событий", "AMQP")
+Rel(bus, animal, "Инциденты/статусы", "AMQP topics")
+Rel(bus, notif, "События на уведомления", "AMQP")
+Rel(bus, inv, "Телеметрия/счётчики", "AMQP")
+Rel(bus, metrics, "Технические метрики", "AMQP")
+Rel(animal, db, "Запись/чтение агрегатов", "SQL")
+Rel(inv, db, "Запись прогнозов/остатков", "SQL")
+Rel(devreg, db, "Каталоги/конфиги/ключи", "SQL")
+Rel(syncCore, db, "Очереди входящих/журналы синка", "SQL")
+Rel(animal, obj, "Ссылки на фрагменты/снапшоты", "S3 refs")
+Rel(bi, metrics, "Экспорт витрин/метрик", "Webhooks/CSV/S3")
+Rel(auth, api, "OIDC/SAML")
+Rel(otel, core, "Сбор телеметрии", "OTLP")
+
+@enduml

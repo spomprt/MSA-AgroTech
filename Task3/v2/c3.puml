@@ -1,0 +1,76 @@
+@startuml
+!includeurl https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+!includeurl https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+LAYOUT_WITH_LEGEND()
+
+System_Boundary(central, "Центральная платформа") {
+  Container_Boundary(api_ct, "API Gateway") {
+    Component(api_rest, "REST Controllers", "HTTP", "CRUD/команды")
+    Component(api_graphql, "GraphQL Resolvers", "GraphQL", "Агрегированные чтения")
+    Component(api_ws, "WebSocket/SSE Hub", "WS/SSE", "Стриминг алертов ≤5с")
+    Component(api_auth, "Auth Filter", "OIDC/JWT", "Авторизация/RBAC")
+    Component(api_clients, "Service Clients", "gRPC", "Клиенты к backend‑сервисам")
+  }
+
+  Container_Boundary(notif_ct, "Notification Service") {
+    Component(notif_cons, "Event Consumer", "AMQP", "Подписка на events.alerts")
+    Component(notif_router, "Alert Router", "Core", "Маршрутизация по правилам/приоритетам")
+    Component(notif_tpl, "Template Engine", "Core", "Рендер шаблонов сообщений")
+    Component(notif_sms, "SMS Driver", "SMPP", "Отправка SMS")
+    Component(notif_push, "Push Driver", "FCM/APNS", "Push‑уведомления")
+    Component(notif_call, "Voice Driver", "Call API", "Звонки/озвучка")
+    Component(notif_tracker, "Delivery Tracker", "Core", "Учёт попыток/статусов")
+    Component(notif_rl, "RateLimiter Client", "Redis", "Ограничение частоты")
+    Component(notif_outbox, "Outbox Publisher", "AMQP", "Гарантированная отправка/ретраи")
+    ComponentDb(notif_db, "PostgreSQL", "DB", "CUD/история уведомлений")
+  }
+
+  Container_Boundary(device_ct, "Device Control Service") {
+    Component(dev_cmd_api, "Command API", "gRPC/REST", "Команды к устройствам")
+    Component(dev_orch, "Command Orchestrator", "Core", "Идемпотентность/подтверждения")
+    Component(dev_adapters, "Adapter Registry", "Core", "OPC‑UA/Modbus/MQTT")
+    Component(dev_state, "State Store", "Repo", "Состояние устройств")
+    ComponentDb(dev_db, "PostgreSQL", "DB", "Конфигурация/статусы")
+  }
+
+  Container_Boundary(count_ct, "Animal Counting Service") {
+    Component(cnt_ing, "Ingest Listener", "AMQP", "События детекции/снимки")
+    Component(cnt_engine, "Counting Engine", "Core", "Подсчёт/агрегация")
+    Component(cnt_recon, "Reconciliation", "Core", "Сверка/аномалии")
+    ComponentDb(cnt_db, "PostgreSQL", "DB", "Результаты подсчёта")
+    Component(cnt_obj, "Snapshot Store", "S3", "Хранение кадров/клипов")
+  }
+
+  Container_Boundary(metrics_ct, "Metrics/Telemetry Service") {
+    Component(m_otlp, "OTLP Ingest", "HTTP", "Приём метрик")
+    Component(m_writer, "TimeSeries Writer", "Core", "Запись в TSDB")
+    Component(m_export, "Exporters", "HTTP/MQTT/CSV", "Выгрузка во внешние системы")
+    ComponentDb(m_tsdb, "Timeseries DB", "DB", "Метрики/телеметрия")
+  }
+
+  Container(eventbus, "Event Bus", "RabbitMQ", "AMQP + MQTT мост")
+  Container_Boundary(va_ct, "Video Analytics Service") {
+    Component(cloud_inf, "Inference Engine", "Core", "Централизованный inference/трекинг")
+  }
+}
+
+System_Boundary(edge, "Edge‑агент (ферма)") {
+  Component(edge_ing, "Video Gateway", "RTSP/ONVIF", "Приём/нормализация/форвардинг потоков")
+  Component(edge_dev, "Device Adapter", "OPC‑UA/Modbus/MQTT", "Команды к оборудованию")
+  Component(edge_sync, "Sync Agent", "gRPC/AMQP", "Буферизация/синхронизация")
+  ComponentDb(edge_db, "Local DB", "SQLite/Postgres", "Outbox/кеш/состояния")
+}
+
+Rel(api_ws, eventbus, "Подписка на события алертов", "AMQP → WS")
+Rel(notif_cons, eventbus, "Consume events.alerts")
+Rel(notif_outbox, eventbus, "Publish delivery events")
+Rel(dev_orch, eventbus, "Команды к edge", "commands.device")
+Rel(cnt_ing, eventbus, "Consume детекции/снимки")
+Rel(m_otlp, eventbus, "Приём телеметрии через мост MQTT", "MQTT→AMQP")
+
+Rel(edge_ing, cloud_inf, "Кадры/фичи", "gRPC")
+Rel(cloud_inf, eventbus, "События детекции")
+Rel(edge_sync, eventbus, "Публикация/приём событий", "AMQP/MQTT")
+
+@enduml

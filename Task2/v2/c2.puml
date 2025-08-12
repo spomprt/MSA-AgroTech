@@ -1,0 +1,74 @@
+@startuml
+!includeurl https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+LAYOUT_WITH_LEGEND()
+
+System_Boundary(central, "Центральная платформа") {
+  Container(api, "API Gateway", "REST/GraphQL", "Единая точка входа для клиентов и интеграций")
+  Container(authz, "AuthN/RBAC Proxy", "OIDC/SAML", "Прокси к IdP, управление ролями")
+  Container(eventbus, "Event Bus", "RabbitMQ (AMQP)", "Очереди команд/событий; мост MQTT")
+  Container(notify, "Notification Service", "gRPC/REST + SMPP", "Push/SMS/звонки; SLA ≤ 5 с")
+  Container(vaCore, "Video Analytics Service", "Service + GPU", "Централизованный inference/трекинг")
+  Container(device, "Device Control Service", "gRPC/REST", "Управление кормушками/поилками; адаптеры")
+  Container(count, "Animal Counting Service", "gRPC", "Агрегация пересчёта с edge, сверка")
+  Container(inv, "Inventory & Forecast Service", "gRPC", "Учёт запасов и прогноз расхода")
+  Container(metrics, "Metrics/Telemetry Service", "OTLP/HTTP", "Сбор и экспорт метрик (ERP/BI)")
+  Container(sync, "Sync Orchestrator", "gRPC + AMQP", "Синхронизация с агентами (≤10 мин)")
+  ContainerDb(pg, "PostgreSQL", "Relational DB", "Транзакционные данные")
+  ContainerDb(ts, "TimescaleDB/InfluxDB", "Time-series DB", "Телеметрия и метрики")
+  ContainerDb(obj, "Object Storage", "S3/MinIO", "Кадры/клипы/артефакты аналитики")
+  Container(redis, "Redis", "Cache", "Кэш/квоты/сессии/rate limits")
+}
+
+System_Boundary(edge, "Edge агент (тонкий шлюз)") {
+  Container(ingest, "Video Gateway", "RTSP/ONVIF → gRPC", "Приём/нормализация потоков, форвардинг в центр")
+  Container(localdevice, "Edge Device Adapter", "OPC-UA/Modbus/TCP/MQTT", "Шлюз команд/телеметрии к оборудованию")
+  Container(localsync, "Edge Sync Agent", "gRPC + AMQP", "Надёжная доставка, буфер при сбоях связи")
+  ContainerDb(localdb, "Local DB", "SQLite", "Минимальные очереди/кэш (outbox)")
+}
+
+Person(op, "Оператор/Приложение", "Web/Mobile")
+System_Ext(idp, "IdP", "OIDC/SAML")
+System_Ext(cams, "Видеокамеры", "RTSP/ONVIF")
+System_Ext(feeders, "Кормушки/поилки", "Контроллеры")
+System_Ext(water, "Фильтрация воды", "Датчики/PLC")
+System_Ext(smsgw, "SMS/Push провайдер", "SMPP/FCM/APNS")
+System_Ext(erp, "ERP/SCADA/BI", "Экспорт метрик")
+
+Rel(op, api, "REST/GraphQL + WebSocket/SSE")
+Rel(api, authz, "OIDC/OAuth2", "AuthN/AuthZ")
+Rel(authz, idp, "SSO", "OIDC/SAML")
+
+Rel(api, notify, "Команды уведомлений")
+Rel(api, device, "Команды управления")
+Rel(api, count, "Запросы/отчёты пересчёта")
+Rel(api, inv, "Запросы/отчёты запаса/прогнозов")
+Rel(metrics, erp, "Экспорт метрик", "HTTP/MQTT/CSV")
+Rel(notify, smsgw, "SMS/Push/звонки")
+Rel(device, feeders, "Управление", "OPC-UA/Modbus/API")
+Rel(device, water, "Мониторинг", "OPC-UA/Modbus/API")
+
+Rel(eventbus, notify, "События/команды")
+Rel(eventbus, device, "Команды")
+Rel(eventbus, count, "События пересчёта")
+Rel(eventbus, inv, "Телеметрия потребления")
+Rel(eventbus, metrics, "Метрики")
+
+Rel(sync, eventbus, "Оркестрация потоков")
+Rel(sync, pg, "Persist")
+Rel(sync, localsync, "Двунаправленная синхронизация", "gRPC + AMQP")
+Rel(notify, redis, "Rate limits/locks")
+
+Rel(count, pg, "CRUD")
+Rel(inv, pg, "CRUD")
+Rel(metrics, ts, "Write/Read")
+Rel(count, obj, "Кадры/артефакты (при необходимости)")
+
+Rel(cams, ingest, "RTSP/ONVIF")
+Rel(ingest, vaCore, "Кадры/фичи", "gRPC")
+Rel(vaCore, eventbus, "События детекции")
+Rel(device, localdevice, "Команды к оборудованию", "MQTT/OPC-UA/Modbus")
+Rel(localsync, eventbus, "Публикация/приём событий", "AMQP/MQTT (мост)")
+Rel(localsync, sync, "Служебная синхронизация", "gRPC")
+Rel(localdb, localsync, "Persist")
+
+@enduml
