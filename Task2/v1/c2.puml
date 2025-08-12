@@ -65,6 +65,15 @@ Rel(edgehub, syncCore, "Буфер офлайн, дедупликация", "Sto
 Rel(metrics, bi, "Экспорт агрегатов/метрик", "Webhooks/CSV/S3")
 
 Rel(auth, api, "OIDC/SAML")
-Rel(otlp, core, "Сбор телеметрии", "OTLP")
-Rel(otlp, edge, "Сбор телеметрии", "OTLP via Edge Hub")
+
+System_Ext(idpExt, "Внешний IdP", "OIDC/SAML; федерация SSO")
+System_Ext(erpBi, "ERP/BI/SCADA", "Получение агрегатов и метрик")
+System_Ext(notifyExt, "Провайдер уведомлений", "SMPP/SMS, FCM/APNS, Voice API")
+
+Rel(auth, idpExt, "Федерация/SSO")
+Rel(bi, erpBi, "Экспорт агрегатов/метрик", "Webhooks/CSV/S3")
+Rel(notif, notifyExt, "Отправка уведомлений", "SMPP/FCM/APNS/Voice")
+
+Rel(api, otlp, "Трейсы/метрики/логи", "OTLP")
+Rel(edgehub, otlp, "Трейсы/метрики/логи", "OTLP")
 @enduml

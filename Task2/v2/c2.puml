@@ -7,6 +7,7 @@ System_Boundary(central, "Центральная платформа") {
   Container(authz, "AuthN/RBAC Proxy", "OIDC/SAML", "Прокси к IdP, управление ролями")
   Container(eventbus, "Event Bus", "RabbitMQ (AMQP)", "Очереди команд/событий; мост MQTT")
   Container(notify, "Notification Service", "gRPC/REST + SMPP", "Push/SMS/звонки; SLA ≤ 5 с")
+  Container(vaCore, "Video Analytics Service", "Service + GPU", "Централизованный inference/трекинг")
   Container(device, "Device Control Service", "gRPC/REST", "Управление кормушками/поилками; адаптеры")
   Container(count, "Animal Counting Service", "gRPC", "Агрегация пересчёта с edge, сверка")
   Container(inv, "Inventory & Forecast Service", "gRPC", "Учёт запасов и прогноз расхода")
@@ -18,14 +19,11 @@ System_Boundary(central, "Центральная платформа") {
   Container(redis, "Redis", "Cache", "Кэш/квоты/сессии/rate limits")
 }
 
-System_Boundary(edge, "Агент на ферме (Edge)") {
-  Container(ingest, "Video Ingest", "RTSP/ONVIF → gRPC", "Приём потоков, декодирование, выбор кадров")
-  Container(ml, "Video Analytics (Inference)", "gRPC", "Модель партнёров; миллисекундные реакции")
-  Container(localproc, "Edge Event Processor", "AMQP (embedded)", "Правила корреляции; локальные алерты")
-  Container(localnotify, "Local Notifier", "SMS/GSM/PA", "Оповещения при оффлайне")
-  Container(localdevice, "Edge Device Adapter", "OPC-UA/Modbus/TCP/MQTT", "Команды к оборудованию")
-  Container(localsync, "Edge Sync Agent", "gRPC + AMQP", "Буферизация и синхронизация с центром")
-  ContainerDb(localdb, "Local DB", "PostgreSQL/SQLite", "Локальные состояния и очереди (outbox)")
+System_Boundary(edge, "Edge агент (тонкий шлюз)") {
+  Container(ingest, "Video Gateway", "RTSP/ONVIF → gRPC", "Приём/нормализация потоков, форвардинг в центр")
+  Container(localdevice, "Edge Device Adapter", "OPC-UA/Modbus/TCP/MQTT", "Шлюз команд/телеметрии к оборудованию")
+  Container(localsync, "Edge Sync Agent", "gRPC + AMQP", "Надёжная доставка, буфер при сбоях связи")
+  ContainerDb(localdb, "Local DB", "SQLite", "Минимальные очереди/кэш (outbox)")
 }
 
 Person(op, "Оператор/Приложение", "Web/Mobile")
@@ -66,15 +64,11 @@ Rel(metrics, ts, "Write/Read")
 Rel(count, obj, "Кадры/артефакты (при необходимости)")
 
 Rel(cams, ingest, "RTSP/ONVIF")
-Rel(ingest, ml, "Кадры/фичи", "gRPC")
-Rel(ml, localproc, "События детекции", "AMQP (embedded)")
-Rel(localproc, localdevice, "Команды", "MQTT/OPC-UA/Modbus")
-Rel(localproc, localnotify, "Локальные алерты", "SMS/GSM/PA")
-Rel(localsync, localproc, "Буферизация событий", "Outbox/AMQP")
-Rel(localsync, eventbus, "Публикация событий", "AMQP/MQTT (мост)")
+Rel(ingest, vaCore, "Кадры/фичи", "gRPC")
+Rel(vaCore, eventbus, "События детекции")
+Rel(device, localdevice, "Команды к оборудованию", "MQTT/OPC-UA/Modbus")
+Rel(localsync, eventbus, "Публикация/приём событий", "AMQP/MQTT (мост)")
 Rel(localsync, sync, "Служебная синхронизация", "gRPC")
 Rel(localdb, localsync, "Persist")
-Rel(localdevice, feeders, "Команды напрямую при оффлайне", "Fieldbus/MQTT")
-Rel(localdevice, water, "Статусы/алерты", "Fieldbus/MQTT")
 
 @enduml

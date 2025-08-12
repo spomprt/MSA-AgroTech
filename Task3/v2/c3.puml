@@ -50,13 +50,13 @@ System_Boundary(central, "Центральная платформа") {
   }
 
   Container(eventbus, "Event Bus", "RabbitMQ", "AMQP + MQTT мост")
+  Container_Boundary(va_ct, "Video Analytics Service") {
+    Component(cloud_inf, "Inference Engine", "Core", "Централизованный inference/трекинг")
+  }
 }
 
 System_Boundary(edge, "Edge‑агент (ферма)") {
-  Component(edge_ing, "Video Ingest", "RTSP/ONVIF", "Приём/декодирование потоков")
-  Component(edge_inf, "Inference Engine", "gRPC", "Модель партнёров, миллисекунды")
-  Component(edge_rules, "Rules Engine", "Core", "Корреляция/правила/фильтрация")
-  Component(edge_notify, "Local Notifier", "SMS/GSM/PA", "Локальные алерты оффлайн")
+  Component(edge_ing, "Video Gateway", "RTSP/ONVIF", "Приём/нормализация/форвардинг потоков")
   Component(edge_dev, "Device Adapter", "OPC‑UA/Modbus/MQTT", "Команды к оборудованию")
   Component(edge_sync, "Sync Agent", "gRPC/AMQP", "Буферизация/синхронизация")
   ComponentDb(edge_db, "Local DB", "SQLite/Postgres", "Outbox/кеш/состояния")
@@ -69,10 +69,8 @@ Rel(dev_orch, eventbus, "Команды к edge", "commands.device")
 Rel(cnt_ing, eventbus, "Consume детекции/снимки")
 Rel(m_otlp, eventbus, "Приём телеметрии через мост MQTT", "MQTT→AMQP")
 
-Rel(edge_inf, edge_rules, "События детекции")
-Rel(edge_rules, edge_dev, "Команды")
-Rel(edge_rules, edge_notify, "Локальные алерты")
-Rel(edge_sync, eventbus, "Публикация событий", "AMQP/MQTT")
-Rel(edge_sync, cnt_ing, "Передача снимков/метаданных", "S3 pre‑signed/AMQP")
+Rel(edge_ing, cloud_inf, "Кадры/фичи", "gRPC")
+Rel(cloud_inf, eventbus, "События детекции")
+Rel(edge_sync, eventbus, "Публикация/приём событий", "AMQP/MQTT")
 
 @enduml
